@@ -1,6 +1,6 @@
 """
 Interactive Streamlit Dashboard for Prophet Supermarket Sales Forecasting
-Enhanced with Sales Analytics Dashboard
+Enhanced with Sales Analytics Dashboard and AI Recommendations
 """
 
 import streamlit as st
@@ -12,7 +12,12 @@ import plotly.express as px
 from datetime import datetime, timedelta
 import os
 import warnings
+import google.generativeai as genai
 warnings.filterwarnings('ignore')
+
+# Configure Google Gemini API
+GEMINI_API_KEY = "AIzaSyCaHr_JDJeympltKqvVax4gT19sNYflWV0"
+genai.configure(api_key=GEMINI_API_KEY)
 
 # Set page configuration
 st.set_page_config(
@@ -366,6 +371,9 @@ def create_forecasting_dashboard(models, data):
             index=default_index,
             help="Choose a product category for analysis"
         )
+        
+        # Save selected category to session state for AI tab
+        st.session_state.selected_category = selected_category
         
         st.write("")  # Spacing
         
@@ -785,6 +793,188 @@ def create_analytics_dashboard(data):
             help="Percentage of weeks with active promotions"
         )
 
+@st.cache_data
+def build_context_for_ai(selected_category, data, forecast, weekly_prices, normal_price):
+    """Build context string for AI recommendations"""
+    try:
+        # Get historical data for the category
+        category_data = data[data['category'] == selected_category].copy()
+        historical_avg = category_data['weekly_sales'].mean()
+        
+        # Calculate discount rates
+        discount_rates = [(normal_price - price) / normal_price * 100 for price in weekly_prices]
+        
+        # Format forecast data
+        forecast_dict = {}
+        for idx, row in forecast.iterrows():
+            forecast_dict[row['ds'].strftime('%Y-%m-%d')] = int(row['yhat'])
+        
+        # Build context string
+        context = f"""Context Data:
+Category: {selected_category}
+Normal price: {normal_price:,}
+Promo prices: {weekly_prices}
+Discount rates: {[f"{rate:.1f}%" for rate in discount_rates]}
+Historical average sales: {historical_avg:.0f} units/week
+Forecast next {len(forecast)} weeks: {forecast_dict}
+Total historical weeks: {len(category_data)}
+Recent 4-week average: {category_data['weekly_sales'].tail(4).mean():.0f} units/week"""
+        
+        return context
+    except Exception as e:
+        return f"Error building context: {str(e)}"
+
+def get_ai_recommendation(context):
+    """Get automatic AI recommendation from Google Gemini"""
+    try:
+        # Guardrails prefix
+        guardrails = """You are a sales forecasting assistant.
+Provide actionable recommendations based ONLY on the Context Data provided below.
+If certain information is missing, acknowledge it and do not invent numbers.
+
+Generate insights covering:
+1. Whether the planned promo prices are effective
+2. Which weeks might see strong or weak sales
+3. Suggestions for adjusting promo prices to maximize sales/profit
+4. Highlight risks (e.g., if discount is too low to impact sales)
+
+Format your response in clear sections with bullet points for easy reading.
+"""
+        
+        # Combine guardrails + context
+        full_prompt = f"{guardrails}\n{context}"
+        
+        # Initialize Gemini model
+        model = genai.GenerativeModel('models/gemini-2.0-flash')
+        
+        # Generate response
+        response = model.generate_content(full_prompt)
+        return response.text
+        
+    except Exception as e:
+        return f"**Error generating AI recommendations:** {str(e)}\n\nPlease check your Gemini API configuration."
+
+def create_ai_recommendation_tab(models, data):
+    """Create the automatic AI recommendation interface"""
+    st.markdown("### 🤖 AI Sales Recommendations")
+    st.markdown("*Automatic insights and recommendations based on your current forecasting data*")
+    
+    # Get current selected category from session state (from forecasting tab)
+    if 'selected_category' not in st.session_state:
+        st.session_state.selected_category = "Sirup"  # Default
+    
+    if 'weekly_prices' not in st.session_state:
+        st.session_state.weekly_prices = [9999] * 16  # Default prices
+    
+    # Category selector for AI analysis
+    categories = sorted(list(models.keys()))
+    selected_category = st.selectbox(
+        "🏷️ Select category for AI analysis:",
+        categories,
+        index=categories.index(st.session_state.selected_category) if st.session_state.selected_category in categories else 0,
+        key="ai_category_select"
+    )
+    
+    # Update session state
+    st.session_state.selected_category = selected_category
+    
+    st.write("")
+    st.divider()
+    
+    # Generate AI recommendations automatically
+    with st.spinner("🤖 AI is analyzing your data and generating recommendations..."):
+        try:
+            # Get data for selected category
+            category_data = data[data['category'] == selected_category].copy()
+            historical_data = prepare_prophet_data(category_data)
+            
+            # Get pricing info
+            last_row = historical_data.iloc[-1]
+            normal_price = last_row['normal_price']
+            
+            # Generate forecast with current pricing strategy
+            model = models[selected_category]
+            forecast = generate_forecast(model, historical_data, st.session_state.weekly_prices, 16)
+            
+            # Build context for AI
+            context = build_context_for_ai(
+                selected_category, 
+                data, 
+                forecast, 
+                st.session_state.weekly_prices, 
+                normal_price
+            )
+            
+            # Get AI recommendations
+            ai_recommendations = get_ai_recommendation(context)
+            
+            # Display recommendations
+            st.markdown("## 🎯 AI-Generated Recommendations")
+            st.markdown("---")
+            st.markdown(ai_recommendations)
+            
+        except Exception as e:
+            st.error(f"**Error generating recommendations:** {str(e)}")
+            st.info("Please ensure all required data is available and try again.")
+    
+    st.write("")
+    st.divider()
+    
+    # Additional insights section
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### 📊 Current Strategy Summary")
+        try:
+            avg_discount = (normal_price - np.mean(st.session_state.weekly_prices)) / normal_price * 100
+            total_forecast = forecast['yhat'].sum()
+            avg_forecast = forecast['yhat'].mean()
+            
+            st.metric("Average Discount Rate", f"{avg_discount:.1f}%")
+            st.metric("Total 16-Week Forecast", f"{total_forecast:,.0f} units")
+            st.metric("Average Weekly Forecast", f"{avg_forecast:.0f} units")
+            
+        except Exception as e:
+            st.error(f"Error calculating metrics: {str(e)}")
+    
+    with col2:
+        st.markdown("### 🔄 Quick Actions")
+        
+        if st.button("🔄 Refresh Recommendations", key="refresh_ai"):
+            st.rerun()
+        
+        if st.button("� View Data Context", key="show_context"):
+            st.session_state.show_ai_context = not st.session_state.get('show_ai_context', False)
+    
+    # Context display (conditional)
+    if st.session_state.get('show_ai_context', False):
+        st.write("")
+        st.markdown("### 🔍 Data Context Used by AI")
+        with st.expander("View detailed context data", expanded=True):
+            try:
+                category_data = data[data['category'] == selected_category].copy()
+                historical_data = prepare_prophet_data(category_data)
+                last_row = historical_data.iloc[-1]
+                normal_price = last_row['normal_price']
+                
+                model = models[selected_category]
+                forecast = generate_forecast(model, historical_data, st.session_state.weekly_prices, 16)
+                
+                context = build_context_for_ai(
+                    selected_category, 
+                    data, 
+                    forecast, 
+                    st.session_state.weekly_prices, 
+                    normal_price
+                )
+                st.code(context, language="text")
+            except Exception as e:
+                st.error(f"Error generating context display: {str(e)}")
+    
+    # Recommendation refresh note
+    st.write("")
+    st.info("💡 **Tip:** Recommendations are automatically generated based on your current promotional pricing strategy. Change prices in the Forecasting Dashboard tab and return here to see updated recommendations.")
+
 # Main Dashboard
 def main():
     # Professional Header
@@ -812,7 +1002,7 @@ def main():
     st.write("")  # Spacing
     
     # Professional Tabs with clear descriptions
-    tab1, tab2 = st.tabs(["� Forecasting Dashboard", "📊 Sales Analytics Dashboard"])
+    tab1, tab2, tab3 = st.tabs(["📈 Forecasting Dashboard", "📊 Sales Analytics Dashboard", "🤖 AI Recommendation"])
     
     with tab1:
         st.markdown("### 🔮 Sales Forecasting & Promotional Planning")
@@ -825,6 +1015,12 @@ def main():
         st.markdown("*Comprehensive sales analytics with Pareto analysis, trend insights, and promotional impact*")
         st.write("")
         create_analytics_dashboard(data)
+    
+    with tab3:
+        st.markdown("### 🤖 AI-Powered Business Recommendations")
+        st.markdown("*Intelligent insights and recommendations based on your forecasting and sales data*")
+        st.write("")
+        create_ai_recommendation_tab(models, data)
     
     # Professional Footer
     st.write("")
