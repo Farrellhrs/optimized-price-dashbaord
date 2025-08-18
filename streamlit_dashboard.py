@@ -1,5 +1,6 @@
 """
 Interactive Streamlit Dashboard for Prophet Supermarket Sales Forecasting
+Enhanced with Sales Analytics Dashboard
 """
 
 import streamlit as st
@@ -115,24 +116,194 @@ def generate_forecast(model, historical_data, weekly_promo_prices, forecast_week
     
     return forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']]
 
-# Main Dashboard
-def main():
-    # Header
-    st.title("🛒 Supermarket Sales Forecasting Dashboard")
-    st.markdown("### Interactive Prophet-based forecasting with promotional pricing controls")
-    st.divider()
+# Analytics Functions for Sales Dashboard
+def pareto_analysis(df):
+    """Generate Pareto analysis (80/20 rule) for categories"""
+    # Calculate total sales by category
+    category_sales = df.groupby('category')['weekly_sales'].sum().sort_values(ascending=False)
     
-    # Load models and data
-    with st.spinner("Loading models and data..."):
-        models = load_models()
-        data = load_data()
+    # Calculate cumulative percentage
+    total_sales = category_sales.sum()
+    cumulative_pct = (category_sales.cumsum() / total_sales * 100)
     
-    if not models or data is None:
-        st.error("Failed to load models or data. Please check your files.")
-        return
+    # Create Pareto chart
+    fig = go.Figure()
     
-    # Success message
-    st.success(f"✅ Loaded {len(models)} Prophet models for forecasting")
+    # Bar chart for sales
+    fig.add_trace(go.Bar(
+        x=category_sales.index,
+        y=category_sales.values,
+        name='Total Sales',
+        marker_color='#2E8B57',
+        yaxis='y'
+    ))
+    
+    # Line chart for cumulative percentage
+    fig.add_trace(go.Scatter(
+        x=category_sales.index,
+        y=cumulative_pct.values,
+        mode='lines+markers',
+        name='Cumulative %',
+        line=dict(color='#1f77b4', width=3),
+        marker=dict(size=6),
+        yaxis='y2'
+    ))
+    
+    # Add 80% line
+    fig.add_hline(y=80, line_dash="dash", line_color="red", 
+                  annotation_text="80% Line", yref='y2')
+    
+    fig.update_layout(
+        title="Pareto Analysis: Category Sales Distribution (80/20 Rule)",
+        xaxis_title="Product Categories",
+        xaxis=dict(tickangle=45),
+        yaxis=dict(title="Total Sales", side="left"),
+        yaxis2=dict(title="Cumulative Percentage (%)", side="right", overlaying="y"),
+        hovermode='x unified',
+        height=500,
+        showlegend=True
+    )
+    
+    # Calculate insights
+    categories_for_80pct = (cumulative_pct <= 80).sum()
+    pct_categories_for_80pct = (categories_for_80pct / len(category_sales)) * 100
+    
+    return fig, categories_for_80pct, pct_categories_for_80pct, category_sales
+
+def top_categories_chart(df, top_n=10):
+    """Create bar chart for top categories by sales"""
+    category_sales = df.groupby('category')['weekly_sales'].sum().sort_values(ascending=False).head(top_n)
+    
+    fig = go.Figure(data=[
+        go.Bar(
+            x=category_sales.values,
+            y=category_sales.index,
+            orientation='h',
+            marker_color='#2E8B57',
+            text=[f'{val:,.0f}' for val in category_sales.values],
+            textposition='outside'
+        )
+    ])
+    
+    fig.update_layout(
+        title=f"Top {top_n} Categories by Total Sales",
+        xaxis_title="Total Sales",
+        yaxis_title="Categories",
+        height=400,
+        showlegend=False
+    )
+    
+    # Calculate insights
+    total_sales = df['weekly_sales'].sum()
+    top_contribution = category_sales.sum() / total_sales * 100
+    
+    return fig, top_contribution
+
+def promo_impact_analysis(df):
+    """Analyze promotional impact on sales"""
+    # Separate promo vs non-promo data
+    promo_sales = df[df['promo_active'] == 1]['weekly_sales']
+    non_promo_sales = df[df['promo_active'] == 0]['weekly_sales']
+    
+    # Create box plot
+    fig = go.Figure()
+    
+    fig.add_trace(go.Box(
+        y=non_promo_sales,
+        name='No Promotion',
+        marker_color='#FF6B6B',
+        boxpoints='outliers'
+    ))
+    
+    fig.add_trace(go.Box(
+        y=promo_sales,
+        name='With Promotion',
+        marker_color='#4ECDC4',
+        boxpoints='outliers'
+    ))
+    
+    fig.update_layout(
+        title="Promotional Impact on Weekly Sales",
+        yaxis_title="Weekly Sales",
+        xaxis_title="Promotion Status",
+        height=400,
+        showlegend=True
+    )
+    
+    # Calculate statistics
+    avg_promo = promo_sales.mean()
+    avg_non_promo = non_promo_sales.mean()
+    improvement = ((avg_promo - avg_non_promo) / avg_non_promo) * 100
+    
+    # Additional bar chart for averages
+    fig_bar = go.Figure(data=[
+        go.Bar(
+            x=['No Promotion', 'With Promotion'],
+            y=[avg_non_promo, avg_promo],
+            marker_color=['#FF6B6B', '#4ECDC4'],
+            text=[f'{avg_non_promo:.0f}', f'{avg_promo:.0f}'],
+            textposition='outside'
+        )
+    ])
+    
+    fig_bar.update_layout(
+        title="Average Sales: Promotion vs Non-Promotion",
+        yaxis_title="Average Weekly Sales",
+        height=300,
+        showlegend=False
+    )
+    
+    return fig, fig_bar, avg_promo, avg_non_promo, improvement
+
+def time_series_trend(df):
+    """Create aggregated time series trend"""
+    # Aggregate sales by week
+    weekly_trend = df.groupby('week')['weekly_sales'].sum().reset_index()
+    
+    # Create datetime for better visualization
+    start_date = datetime(2020, 1, 1)
+    weekly_trend['date'] = pd.to_datetime([start_date + timedelta(weeks=w-1) for w in weekly_trend['week']])
+    
+    fig = go.Figure()
+    
+    fig.add_trace(go.Scatter(
+        x=weekly_trend['date'],
+        y=weekly_trend['weekly_sales'],
+        mode='lines+markers',
+        name='Total Weekly Sales',
+        line=dict(color='#2E8B57', width=2),
+        marker=dict(size=4)
+    ))
+    
+    # Add trend line
+    z = np.polyfit(weekly_trend['week'], weekly_trend['weekly_sales'], 1)
+    p = np.poly1d(z)
+    
+    fig.add_trace(go.Scatter(
+        x=weekly_trend['date'],
+        y=p(weekly_trend['week']),
+        mode='lines',
+        name='Trend Line',
+        line=dict(color='red', width=2, dash='dash')
+    ))
+    
+    fig.update_layout(
+        title="Weekly Sales Trend (All Categories Combined)",
+        xaxis_title="Date",
+        yaxis_title="Total Weekly Sales",
+        height=400,
+        hovermode='x unified'
+    )
+    
+    # Calculate growth
+    first_half_avg = weekly_trend['weekly_sales'][:50].mean()
+    second_half_avg = weekly_trend['weekly_sales'][50:].mean()
+    growth_rate = ((second_half_avg - first_half_avg) / first_half_avg) * 100
+    
+    return fig, growth_rate
+
+def create_forecasting_dashboard(models, data):
+    """Create the forecasting dashboard content"""
     
     # Sidebar controls
     st.sidebar.header("🎛️ Dashboard Controls")
@@ -441,17 +612,163 @@ def main():
             delta=f"{forecast_change:,.0f}",
             help="Comparison with recent historical average"
         )
+
+def create_analytics_dashboard(data):
+    """Create the sales analytics dashboard content"""
+    st.header("📊 Sales Analytics Dashboard")
+    st.markdown("### Business insights and performance analysis")
+    st.divider()
+    
+    # Pareto Analysis
+    st.subheader("🎯 Pareto Analysis (80/20 Rule)")
+    
+    with st.spinner("Generating Pareto analysis..."):
+        pareto_fig, categories_80pct, pct_categories_80pct, category_sales = pareto_analysis(data)
+    
+    st.plotly_chart(pareto_fig, use_container_width=True)
+    
+    # Insights text
+    st.info(f"""
+    **📈 Pareto Insights:** 
+    • **{categories_80pct}** categories ({pct_categories_80pct:.1f}% of all categories) generate 80% of total sales
+    • This follows the classic 80/20 rule, indicating a concentrated sales distribution
+    • Focus marketing and inventory efforts on these top-performing categories
+    """)
+    
+    st.divider()
+    
+    # Two columns for next analyses
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("🏆 Top Categories by Sales")
+        
+        with st.spinner("Analyzing top categories..."):
+            top_fig, top_contribution = top_categories_chart(data)
+        
+        st.plotly_chart(top_fig, use_container_width=True)
+        
+        st.success(f"""
+        **� Key Insight:** 
+        Top 10 categories contribute **{top_contribution:.1f}%** of total sales
+        """)
+    
+    with col2:
+        st.subheader("💰 Promotional Impact Analysis")
+        
+        with st.spinner("Analyzing promotional impact..."):
+            promo_box_fig, promo_bar_fig, avg_promo, avg_non_promo, improvement = promo_impact_analysis(data)
+        
+        st.plotly_chart(promo_bar_fig, use_container_width=True)
+        st.plotly_chart(promo_box_fig, use_container_width=True)
+        
+        if improvement > 0:
+            st.success(f"""
+            **📊 Promotional Impact:** 
+            Promotions increase average sales by **{improvement:.1f}%**
+            (${avg_promo:,.0f} vs ${avg_non_promo:,.0f})
+            """)
+        else:
+            st.warning(f"""
+            **📊 Promotional Impact:** 
+            Promotions show **{improvement:.1f}%** change in average sales
+            """)
+    
+    st.divider()
+    
+    # Time Series Trend
+    st.subheader("📈 Overall Sales Trend Over Time")
+    
+    with st.spinner("Analyzing sales trends..."):
+        trend_fig, growth_rate = time_series_trend(data)
+    
+    st.plotly_chart(trend_fig, use_container_width=True)
+    
+    # Growth insight
+    if growth_rate > 0:
+        st.success(f"""
+        **📈 Growth Insight:** 
+        Sales show a **{growth_rate:.1f}%** improvement from first half to second half of the period
+        """)
+    else:
+        st.warning(f"""
+        **📉 Trend Alert:** 
+        Sales show a **{abs(growth_rate):.1f}%** decline from first half to second half
+        """)
+    
+    # Summary statistics
+    st.divider()
+    st.subheader("📋 Business Summary")
+    
+    col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+    
+    with col_s1:
+        st.metric(
+            "Total Categories",
+            data['category'].nunique(),
+            help="Number of product categories"
+        )
+    
+    with col_s2:
+        st.metric(
+            "Total Sales",
+            f"{data['weekly_sales'].sum():,.0f}",
+            help="Total sales across all categories and weeks"
+        )
+    
+    with col_s3:
+        st.metric(
+            "Avg Weekly Sales",
+            f"{data['weekly_sales'].mean():,.0f}",
+            help="Average weekly sales per category"
+        )
+    
+    with col_s4:
+        promo_weeks = (data['promo_active'] == 1).sum()
+        total_weeks = len(data)
+        promo_percentage = (promo_weeks / total_weeks) * 100
+        st.metric(
+            "Promotion Coverage",
+            f"{promo_percentage:.1f}%",
+            help="Percentage of weeks with active promotions"
+        )
+
+# Main Dashboard
+def main():
+    # Header
+    st.title("🛒 Supermarket Sales Analytics & Forecasting")
+    st.markdown("### Comprehensive business intelligence and predictive analytics platform")
+    st.divider()
+    
+    # Load models and data
+    with st.spinner("Loading models and data..."):
+        models = load_models()
+        data = load_data()
+    
+    if not models or data is None:
+        st.error("Failed to load models or data. Please check your files.")
+        return
+    
+    # Success message
+    st.success(f"✅ Loaded {len(models)} Prophet models and {len(data):,} data records")
+    
+    # Create tabs
+    tab1, tab2 = st.tabs(["🔮 Forecasting Dashboard", "📊 Sales Analytics Dashboard"])
+    
+    with tab1:
+        create_forecasting_dashboard(models, data)
+    
+    with tab2:
+        create_analytics_dashboard(data)
     
     # Footer
     st.divider()
     st.markdown("""
     **Enhanced Dashboard Features:**
-    - 🟢 **Green Line**: Historical actual sales data
-    - 🔴 **Red Line**: Prophet model forecasts (16-week horizon)
-    - 🎛️ **Weekly Pricing Controls**: Set individual promo prices for each forecast week
-    - 📊 **Confidence Intervals**: Shaded area shows forecast uncertainty
-    - 🎯 **Quick Actions**: Apply common discount scenarios instantly
-    - 📈 **Real-time Updates**: Forecasts update automatically as you adjust prices
+    - 🔮 **Forecasting Tab**: Prophet-based predictions with weekly pricing controls
+    - 📊 **Analytics Tab**: Business insights including Pareto analysis and trend analysis
+    - 🟢 **Green**: Historical data | 🔴 **Red**: Forecasts | 🔵 **Blue**: Cumulative metrics
+    - 🎛️ **Interactive Controls**: Real-time updates and scenario planning
     """)
 
 if __name__ == "__main__":
