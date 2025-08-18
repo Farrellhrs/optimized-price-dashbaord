@@ -426,7 +426,7 @@ def create_forecasting_dashboard(models, data):
             model = models[selected_category]
             forecast = generate_forecast(model, historical_data, st.session_state.weekly_prices, forecast_weeks)
         
-        # Create interactive plot
+        # Build figure with required styles (historical: green lines, forecast: red lines+markers)
         fig = go.Figure()
         
         # Historical data
@@ -436,51 +436,39 @@ def create_forecasting_dashboard(models, data):
             mode='lines',
             name='Historical Sales',
             line=dict(color='#2E8B57', width=2),
-            hovertemplate='<b>Historical</b><br>' +
-                         'Date: %{x}<br>' +
-                         'Sales: %{y:,.0f}<br>' +
-                         '<extra></extra>'
+            hovertemplate='<b>Historical</b><br>Date: %{x}<br>Sales: %{y:,.0f}<extra></extra>'
         ))
         
-        # Forecast data
-        fig.add_trace(go.Scatter(
-            x=forecast['ds'],
-            y=forecast['yhat'],
-            mode='lines',
-            name='Forecast',
-            line=dict(color='#DC143C', width=2, dash='dash'),
-            hovertemplate='<b>Forecast</b><br>' +
-                         'Date: %{x}<br>' +
-                         'Sales: %{y:,.0f}<br>' +
-                         '<extra></extra>'
-        ))
-        
-        # Confidence intervals
+        # Confidence interval first (upper then lower with fill)
         fig.add_trace(go.Scatter(
             x=forecast['ds'],
             y=forecast['yhat_upper'],
             mode='lines',
-            line=dict(color='rgba(220, 20, 60, 0)', width=0),
+            line=dict(color='rgba(220,20,60,0)', width=0),
             showlegend=False,
             hoverinfo='skip'
         ))
-        
         fig.add_trace(go.Scatter(
             x=forecast['ds'],
             y=forecast['yhat_lower'],
             mode='lines',
             fill='tonexty',
-            fillcolor='rgba(220, 20, 60, 0.2)',
-            line=dict(color='rgba(220, 20, 60, 0)', width=0),
+            fillcolor='rgba(220,20,60,0.15)',
+            line=dict(color='rgba(220,20,60,0)', width=0),
             name='Confidence Interval',
-            hovertemplate='<b>Confidence Interval</b><br>' +
-                         'Date: %{x}<br>' +
-                         'Upper: ' + str(forecast['yhat_upper'].iloc[0] if len(forecast) > 0 else 0) + '<br>' +
-                         'Lower: %{y:,.0f}<br>' +
-                         '<extra></extra>'
+            hovertemplate='<b>CI</b><br>Date: %{x}<br>Lower: %{y:,.0f}<extra></extra>'
+        ))
+        # Forecast trace with markers
+        fig.add_trace(go.Scatter(
+            x=forecast['ds'],
+            y=forecast['yhat'],
+            mode='lines+markers',
+            name='Forecast',
+            line=dict(color='#DC143C', width=2),
+            marker=dict(color='#DC143C', size=6),
+            hovertemplate='<b>Forecast</b><br>Date: %{x}<br>Sales: %{y:,.0f}<extra></extra>'
         ))
         
-        # Update layout
         fig.update_layout(
             title=f"Weekly Sales Forecast - {selected_category}",
             xaxis_title="Date",
@@ -488,12 +476,10 @@ def create_forecasting_dashboard(models, data):
             hovermode='x unified',
             height=500,
             showlegend=True,
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            xaxis=dict(
+                rangeslider=dict(visible=True),
+                type="date"
             )
         )
         
