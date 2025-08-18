@@ -16,11 +16,57 @@ warnings.filterwarnings('ignore')
 
 # Set page configuration
 st.set_page_config(
-    page_title="🛒 Supermarket Sales Forecasting Dashboard",
+    page_title="🛒 Supermarket Analytics Platform",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Custom CSS for better styling
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 3rem;
+        font-weight: bold;
+        text-align: center;
+        color: #1f77b4;
+        margin-bottom: 0.5rem;
+    }
+    .sub-header {
+        font-size: 1.2rem;
+        text-align: center;
+        color: #666;
+        margin-bottom: 2rem;
+    }
+    .metric-container {
+        background-color: #f0f2f6;
+        padding: 1rem;
+        border-radius: 10px;
+        margin: 0.5rem 0;
+    }
+    .chart-container {
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 1rem;
+        margin: 1rem 0;
+        background-color: white;
+    }
+    .insight-box {
+        background-color: #e8f4fd;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 4px solid #1f77b4;
+        margin: 1rem 0;
+    }
+    .legend-box {
+        background-color: #f8f9fa;
+        padding: 0.8rem;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+        font-size: 0.9rem;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Cache functions for performance
 @st.cache_resource
@@ -303,54 +349,67 @@ def time_series_trend(df):
     return fig, growth_rate
 
 def create_forecasting_dashboard(models, data):
-    """Create the forecasting dashboard content"""
+    """Create the refined forecasting dashboard content"""
     
-    # Sidebar controls
-    st.sidebar.header("🎛️ Dashboard Controls")
-    st.sidebar.divider()
+    # === SIDEBAR CONTROLS ===
+    with st.sidebar:
+        st.markdown("### 🎛️ Forecasting Controls")
+        st.markdown("---")
+        
+        # Category selection with better styling
+        categories = sorted(list(models.keys()))
+        default_index = categories.index("Sirup") if "Sirup" in categories else 0
+        
+        selected_category = st.selectbox(
+            "📦 **Product Category**",
+            categories,
+            index=default_index,
+            help="Choose a product category for analysis"
+        )
+        
+        st.write("")  # Spacing
+        
+        # Get data for selected category
+        category_data = data[data['category'] == selected_category].copy()
+        historical_data = prepare_prophet_data(category_data)
+        
+        # Get pricing information
+        last_row = historical_data.iloc[-1]
+        normal_price = last_row['normal_price']
+        default_promo_price = last_row['promo_price']
+        
+        # Forecast horizon control
+        forecast_weeks = st.slider(
+            "� **Forecast Horizon (weeks)**",
+            min_value=8,
+            max_value=24,
+            value=16,
+            step=4,
+            help="Number of weeks to forecast ahead"
+        )
+        
+        st.write("")
+        
+        # Current pricing display
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Normal Price", f"${normal_price:,.0f}")
+        with col2:
+            st.metric("Current Promo", f"${default_promo_price:,.0f}")
     
-    # Category selection - Default to "Sirup"
-    categories = sorted(list(models.keys()))
-    default_index = 0
-    if "Sirup" in categories:
-        default_index = categories.index("Sirup")
-    
-    selected_category = st.sidebar.selectbox(
-        "📦 Select Product Category:",
-        categories,
-        index=default_index,
-        help="Choose a product category to view forecasts"
-    )
-    
-    # Get historical data for selected category
-    category_data = data[data['category'] == selected_category].copy()
-    historical_data = prepare_prophet_data(category_data)
-    
-    # Get pricing information
-    last_row = historical_data.iloc[-1]
-    normal_price = last_row['normal_price']
-    default_promo_price = last_row['promo_price']
-    
-    # Promotional pricing controls
-    st.sidebar.subheader("💰 Promotional Pricing")
-    
-    # Display current pricing info
-    st.sidebar.info(f"**Normal Price:** ${normal_price:,.0f}")
-    st.sidebar.info(f"**Default Promo Price:** ${default_promo_price:,.0f}")
-    
-    # Forecast weeks control (moved up for better UX)
-    forecast_weeks = st.sidebar.slider(
-        "📅 Forecast Horizon (weeks):",
-        min_value=8,
-        max_value=24,
-        value=16,
-        step=4,
-        help="Number of weeks to forecast ahead"
-    )
+    # === MAIN CONTENT AREA ===
     
     # Initialize session state for weekly prices
     if 'weekly_prices' not in st.session_state:
         st.session_state.weekly_prices = [int(default_promo_price)] * forecast_weeks
+    
+    # Adjust prices list if forecast weeks changed
+    current_length = len(st.session_state.weekly_prices)
+    if current_length != forecast_weeks:
+        if current_length < forecast_weeks:
+            st.session_state.weekly_prices.extend([int(default_promo_price)] * (forecast_weeks - current_length))
+        else:
+            st.session_state.weekly_prices = st.session_state.weekly_prices[:forecast_weeks]
     
     # Adjust the list size if forecast_weeks changed
     current_length = len(st.session_state.weekly_prices)
@@ -721,41 +780,58 @@ def create_analytics_dashboard(data):
 
 # Main Dashboard
 def main():
-    # Header
-    st.title("🛒 Supermarket Sales Analytics & Forecasting")
-    st.markdown("### Comprehensive business intelligence and predictive analytics platform")
-    st.divider()
+    # Professional Header
+    st.markdown('<h1 class="main-header">🛒 Supermarket Analytics Platform</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-header">Comprehensive Business Intelligence & Predictive Analytics Dashboard</p>', unsafe_allow_html=True)
     
     # Load models and data
-    with st.spinner("Loading models and data..."):
+    with st.spinner("🔄 Loading models and data..."):
         models = load_models()
         data = load_data()
     
     if not models or data is None:
-        st.error("Failed to load models or data. Please check your files.")
+        st.error("❌ Failed to load models or data. Please check your files.")
         return
     
-    # Success message
-    st.success(f"✅ Loaded {len(models)} Prophet models and {len(data):,} data records")
+    # Success message with metrics
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("📊 Models Loaded", f"{len(models)}", help="Prophet forecasting models")
+    with col2:
+        st.metric("📈 Data Records", f"{len(data):,}", help="Historical sales records")
+    with col3:
+        st.metric("🏷️ Categories", f"{data['category'].nunique()}", help="Product categories")
     
-    # Create tabs
-    tab1, tab2 = st.tabs(["🔮 Forecasting Dashboard", "📊 Sales Analytics Dashboard"])
+    st.write("")  # Spacing
+    
+    # Professional Tabs with clear descriptions
+    tab1, tab2 = st.tabs(["� Forecasting Dashboard", "📊 Sales Analytics Dashboard"])
     
     with tab1:
+        st.markdown("### 🔮 Sales Forecasting & Promotional Planning")
+        st.markdown("*Interactive Prophet-based forecasting with dynamic pricing controls and scenario planning*")
+        st.write("")
         create_forecasting_dashboard(models, data)
     
     with tab2:
+        st.markdown("### 📊 Business Intelligence & Performance Analytics")
+        st.markdown("*Comprehensive sales analytics with Pareto analysis, trend insights, and promotional impact*")
+        st.write("")
         create_analytics_dashboard(data)
     
-    # Footer
-    st.divider()
+    # Professional Footer
+    st.write("")
+    st.write("")
+    st.markdown("---")
     st.markdown("""
-    **Enhanced Dashboard Features:**
-    - 🔮 **Forecasting Tab**: Prophet-based predictions with weekly pricing controls
-    - 📊 **Analytics Tab**: Business insights including Pareto analysis and trend analysis
-    - 🟢 **Green**: Historical data | 🔴 **Red**: Forecasts | 🔵 **Blue**: Cumulative metrics
-    - 🎛️ **Interactive Controls**: Real-time updates and scenario planning
-    """)
+    <div class="legend-box">
+        <strong>🎯 Dashboard Legend:</strong><br>
+        🟢 <strong>Green Lines:</strong> Historical sales data<br>
+        🔴 <strong>Red Lines + Dots:</strong> Prophet forecasts with confidence intervals<br>
+        🔵 <strong>Blue Lines:</strong> Cumulative metrics and trend analysis<br>
+        📊 <strong>Interactive Charts:</strong> Zoom, pan, and hover for detailed insights
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
