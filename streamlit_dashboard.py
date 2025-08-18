@@ -439,14 +439,21 @@ def create_forecasting_dashboard(models, data):
                     week_idx = i + j
                     if week_idx < forecast_weeks:
                         with col:
-                            min_price = max(1, int(normal_price * 0.5))
-                            max_price = int(normal_price)
+                            current_value = st.session_state.weekly_prices[week_idx]
+                            
+                            # Ensure min_price is always less than or equal to current value
+                            suggested_min = max(1, int(normal_price * 0.3))
+                            min_price = min(suggested_min, current_value)
+                            
+                            # Ensure max_price is always greater than or equal to current value
+                            suggested_max = int(normal_price)
+                            max_price = max(suggested_max, current_value)
                             
                             st.session_state.weekly_prices[week_idx] = st.number_input(
                                 f"Week {week_idx + 1}",
                                 min_value=min_price,
                                 max_value=max_price,
-                                value=st.session_state.weekly_prices[week_idx],
+                                value=current_value,
                                 step=100,
                                 key=f"week_{week_idx}",
                                 help=f"Week {week_idx + 1} promotional price"
