@@ -561,29 +561,6 @@ def create_forecasting_dashboard(models, data):
             help="Choose a product category for analysis"
         )
 
-        # Store selection (mockup - doesn't affect functionality)
-        store_options = [
-            "All Stores",
-            "Store A - Jakarta Central",
-            "Store B - Jakarta South", 
-            "Store C - Bandung",
-            "Store D - Surabaya",
-            "Store E - Medan"
-        ]
-        
-        selected_store = st.selectbox(
-            "🏪 **Store Location**",
-            store_options,
-            index=0,
-            help="Select store location (mockup feature)"
-        )
-        
-        # Display selected store info
-        if selected_store != "All Stores":
-            st.info(f"📍 Selected: {selected_store}")
-        else:
-            st.info("📍 Showing aggregated data from all stores")
-
         # Save selected category to session state for AI tab
         st.session_state.selected_category = selected_category
 
