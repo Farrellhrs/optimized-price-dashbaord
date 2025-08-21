@@ -31,41 +31,6 @@ st.set_page_config(
 # Custom CSS for professional styling
 st.markdown("""
 <style>
-    /* Force light theme - Override dark mode */
-    .stApp {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-    }
-    
-    /* Force light theme for all major containers */
-    .main .block-container {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-    }
-    
-    /* Force light sidebar */
-    .css-1d391kg, .css-1aumxhk, section[data-testid="stSidebar"] {
-        background-color: #f8fafc !important;
-        color: #000000 !important;
-    }
-    
-    /* Force light mode for text elements */
-    .stMarkdown, .stText, p, h1, h2, h3, h4, h5, h6, div {
-        color: #000000 !important;
-    }
-    
-    /* Force light mode for inputs and widgets */
-    .stSelectbox, .stSlider, .stNumberInput, .stButton > button {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-    }
-    
-    /* Force light mode for dataframes and tables */
-    .stDataFrame, .element-container {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-    }
-    
     /* Global font and spacing improvements */
     .main > div {
         padding-top: 2rem;
