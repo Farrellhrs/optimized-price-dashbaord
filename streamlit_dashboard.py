@@ -1826,7 +1826,7 @@ Format your response in clear sections for easy reading."""
         full_prompt = f"{guardrails}\n\n{context}"
 
         # Initialize Gemini model
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        model = genai.GenerativeModel('gemini-2.0-flash')
 
         # Generate response
         response = model.generate_content(full_prompt)
