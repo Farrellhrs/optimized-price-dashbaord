@@ -76,13 +76,16 @@ st.markdown("""
         font-size: 2.5rem;
         font-weight: 700;
         color: #1e3a8a;
-        margin: 0 0 -0.3rem 0;
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+        padding-top: 0 !important;
         background: linear-gradient(135deg, #1e3a8a, #3b82f6);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
         line-height: 0.9;
         letter-spacing: -0.02em;
+        
     }
     
    .tagline {
