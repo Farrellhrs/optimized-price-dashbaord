@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import os
 import warnings
 import google.generativeai as genai
+import base64
 warnings.filterwarnings('ignore')
 
 # Configure Google Gemini API
@@ -21,8 +22,8 @@ genai.configure(api_key=GEMINI_API_KEY)
 
 # Set page configuration
 st.set_page_config(
-    page_title="🛒 Supermarket Analytics Platform",
-    page_icon="📈",
+    page_title="� ProfitLens - Sales Analytics Platform",
+    page_icon="�",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -35,22 +36,64 @@ st.markdown("""
         padding-top: 2rem;
     }
     
+    /* Header container styling */
+    .header-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1rem;
+        margin-bottom: 2rem;
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(226, 232, 240, 0.8);
+    }
+    
+   .logo-container {
+       margin-right: 1.5rem;  /* MODIFIED: Was 2rem, reduced the gap */
+       display: flex;
+       align-items: center;
+       justify-content: center;
+   }
+    
+    .logo-img {
+        width: 80px;
+        height: 80px;
+        object-fit: contain;
+        filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.1));
+        border-radius: 8px;
+    }
+    
+    .brand-container {
+        text-align: left;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    
     /* Main dashboard styling */
     .main-title {
         font-size: 2.5rem;
         font-weight: 700;
         color: #1e3a8a;
-        margin-bottom: 0.5rem;
-        text-align: center;
+        margin: 0 0 -0.3rem 0;
+        background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        line-height: 0.9;
+        letter-spacing: -0.02em;
     }
     
-    .tagline {
-        font-size: 1.1rem;
-        color: #6b7280;
-        text-align: center;
-        margin-bottom: 2rem;
-        font-style: italic;
-    }
+   .tagline {
+       font-size: 1.1rem;
+       color: #6b7280;
+       margin: 0;
+       font-style: italic;
+       font-weight: 500;
+       line-height: 1.1;
+       opacity: 0.9;
+   }
     
     /* Tab content styling */
     .tab-title {
@@ -141,11 +184,61 @@ st.markdown("""
     .css-1d391kg {
         background-color: #f8fafc;
     }
+    
+    /* Responsive design for header */
+    @media (max-width: 768px) {
+        .header-container {
+            flex-direction: column;
+            text-align: center;
+            padding: 1.5rem 1rem;
+        }
+        
+        .logo-container {
+            margin-right: 0;
+            margin-bottom: 1rem;
+        }
+        
+        .brand-container {
+            text-align: center;
+        }
+        
+        .main-title {
+            font-size: 2rem;
+        }
+        
+        .tagline {
+            font-size: 1rem;
+        }
+    }
+    
+    /* Enhanced visual polish */
+    .header-container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, #3b82f6, #1e40af, #3b82f6);
+        border-radius: 15px 15px 0 0;
+    }
+    
+    .header-container {
+        position: relative;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # Cache functions for performance
 
+def get_base64_image(image_path):
+    """Convert image to base64 string for HTML embedding"""
+    try:
+        with open(image_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    except Exception as e:
+        st.warning(f"Could not load logo: {e}")
+        return ""
 
 @st.cache_resource
 def load_models():
@@ -2081,9 +2174,18 @@ def create_ai_recommendation_tab(models, data):
 
 
 def main():
-    # Professional Header with clean styling
-    st.markdown('<h1 class="main-title">🛒 Supermarket Analytics Platform</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="tagline">Comprehensive business intelligence & predictive analytics dashboard</p>', unsafe_allow_html=True)
+    # Professional Header with Logo and Branding
+    st.markdown("""
+    <div class="header-container">
+        <div class="logo-container">
+            <img src="data:image/png;base64,{}" class="logo-img" alt="ProfitLens Logo">
+        </div>
+        <div class="brand-container">
+            <h1 class="main-title">ProfitLens</h1>
+            <p class="tagline">Advanced Sales Analytics & Forecasting Platform</p>
+        </div>
+    </div>
+    """.format(get_base64_image("logo.png")), unsafe_allow_html=True)
     
     # Load models and data
     with st.spinner("🔄 Loading models and data..."):
